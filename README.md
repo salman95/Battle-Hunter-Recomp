@@ -66,32 +66,59 @@ automated work, all documented below.
 
 ### The easy way — Drop & Play (recommended)
 
-After cloning, install the one-click launcher and drop your game file on it:
+The Drop & Play tool **selects your game file — including the squeezed `.ecm` format — and automates
+the entire recompile**, from raw file to running game. You never touch a build command.
 
 ```sh
-sh tools/install-drop-and-play.sh
+# from zero:
+git clone --recurse-submodules <this-repo-url> BattleHunterRecomp
+cd BattleHunterRecomp
+sh tools/install-drop-and-play.sh   # one-time: registers the launcher with your desktop
 ```
 
-Then either **drag your `BATTLE HUNTER.iso.ecm`** onto the "Battle Hunter — Drop & Play"
-icon (KDE; on GNOME use right-click → *Open With*), or run it from a terminal:
+#### Recompiling from your `.ecm` file (the ECM select feature)
 
-```sh
-python3 tools/drop_and_play.py "~/Downloads/BATTLE HUNTER.iso.ecm"
-```
+Select your `BATTLE HUNTER.iso.ecm` (or a `.bin`/`.cue` dump) by **any** of these four ways — they're
+all the same thing to the tool:
 
-It does everything below by itself — unsqueezes the `.ecm`, reconstructs the cue
-sheet, translates **your** disc into C, compiles, and boots straight into the game
-(no launcher click needed; controller preconfigured). The first run takes ~10
-minutes and prints progress in a terminal window; every run after that is seconds
-(it stamps your disc + framework and skips unchanged work). It refuses nothing
-silently: wrong-revision discs are flagged with a warning, build failures stop
-with the log visible.
+| # | How you select the file | What you'll see |
+|---|---|---|
+| 1 | **Drag & drop** — drag `BATTLE HUNTER.iso.ecm` onto the **“Battle Hunter — Drop & Play”** launcher icon (KDE, or GNOME with desktop icons) | a terminal window opens and streams progress |
+| 2 | **Open With** — right-click the `.ecm` → *Open With Other Application* → **Battle Hunter — Drop & Play** (GNOME) | same terminal progress window |
+| 3 | **File picker** — launch the tool with no arguments and pick the `.ecm` in the dialog | progress in the launching terminal |
+| 4 | **Terminal** — `python3 tools/drop_and_play.py "~/Downloads/BATTLE HUNTER.iso.ecm"` (quote paths with spaces) | progress right in your shell |
+
+Whichever way you select it, the tool then does **all** of the below, by itself:
+1. **Unsqueezes** the `.ecm` → `disc/BattleHunter.bin` (builds the bundled `unecm` on first use).
+2. **Verifies** you have the supported revision (USA `SLUS-01335`) against known digests — a different
+   revision gets a clear warning, never a silent guess.
+3. **Reconstructs the cue sheet** (the 5-track layout this project reverse-engineered).
+4. **Translates your disc into C** (this is why no game code is in the repo — it's made locally, from your file).
+5. **Compiles** the native game with cmake + gcc.
+6. **Boots straight into the game** — no launcher click, controller preconfigured.
+7. **Stamps** your disc + framework — selecting the same file again is **seconds**, straight to the game
+   (delete `build-release/.bh_stamp` to force a rebuild).
+
+First run ≈ 10 minutes with live progress; after that it's seconds per launch.
 
 <p align="center">
 <img src="docs/img/pipeline.png" width="88%" alt="Drop &amp; Play pipeline: your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
 </p>
 
-(No arguments at all → it opens a file picker.)
+Where things land: your image is staged to `disc/BattleHunter.bin` + `disc/BattleHunter.cue` (never
+modified), the translation goes to `generated/` (gitignored), the game + saves live under
+`build-release/`. Progress is printed with a timer at each step; any failure stops with the full log
+visible instead of a silent error.
+
+<details>
+<summary>Self-test (what CI runs after install):</summary>
+
+```sh
+# full pipeline + 25s headless boot check, then exits:
+python3 tools/drop_and_play.py "/path/to/BATTLE HUNTER.iso.ecm" --soak 25
+```
+
+</details>
 
 ### The manual way (same steps, by hand)
 
