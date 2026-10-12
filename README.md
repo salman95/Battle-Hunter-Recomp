@@ -221,7 +221,7 @@ codegen_setup.c/.h   title-side codegen hooks
 CMakeLists.txt       thin build glue (adds the runtime target)
 psxrecomp/           submodule → the framework (pinned)
 recomp-ui/           submodule → the launcher UI (pinned)
-docs/                the plain-English PDF report
+docs/                the plain-English PDF report + img/ (screenshots, pipeline diagram)
 generated/          (NOT committed — you create it in step 3)
 disc/                (NOT committed — your dump goes here)
 ```
