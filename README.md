@@ -22,6 +22,16 @@ music tracks playing at the right moments, on a real 8BitDo controller.
 plain-English explanation of the whole project (how the disc layout was reconstructed, how the
 translation works, how it was tested).
 
+## Screenshots
+
+<sub>Captured from the recompiled game running natively on PC (software renderer, native 320×240
+VRAM, upscaled 2×). *Battle Hunter* and its artwork remain the property of their original creators.</sub>
+
+<p align="center">
+<img src="docs/img/shot-title.png" width="31%" alt="Title screen"> <img src="docs/img/shot-menu.png" width="31%" alt="Main menu"> <img src="docs/img/shot-story.png" width="31%" alt="Story scene">
+</p>
+<p align="center"><sub>Title screen · main menu (OST playing) · story dialogue</sub></p>
+
 ---
 
 ## Distribution model — read this first
@@ -76,6 +86,10 @@ minutes and prints progress in a terminal window; every run after that is second
 (it stamps your disc + framework and skips unchanged work). It refuses nothing
 silently: wrong-revision discs are flagged with a warning, build failures stop
 with the log visible.
+
+<p align="center">
+<img src="docs/img/pipeline.png" width="88%" alt="Drop &amp; Play pipeline: your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
+</p>
 
 (No arguments at all → it opens a file picker.)
 
