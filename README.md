@@ -54,6 +54,35 @@ automated work, all documented below.
 
 ## Steps (from zero to playing)
 
+### The easy way — Drop & Play (recommended)
+
+After cloning, install the one-click launcher and drop your game file on it:
+
+```sh
+sh tools/install-drop-and-play.sh
+```
+
+Then either **drag your `BATTLE HUNTER.iso.ecm`** onto the "Battle Hunter — Drop & Play"
+icon (KDE; on GNOME use right-click → *Open With*), or run it from a terminal:
+
+```sh
+python3 tools/drop_and_play.py "~/Downloads/BATTLE HUNTER.iso.ecm"
+```
+
+It does everything below by itself — unsqueezes the `.ecm`, reconstructs the cue
+sheet, translates **your** disc into C, compiles, and boots straight into the game
+(no launcher click needed; controller preconfigured). The first run takes ~10
+minutes and prints progress in a terminal window; every run after that is seconds
+(it stamps your disc + framework and skips unchanged work). It refuses nothing
+silently: wrong-revision discs are flagged with a warning, build failures stop
+with the log visible.
+
+(No arguments at all → it opens a file picker.)
+
+### The manual way (same steps, by hand)
+
+If you'd rather run each step yourself:
+
 ```sh
 # 1. Clone with submodules (the framework + launcher are pinned gitlinks)
 git clone --recurse-submodules <this-repo-url> BattleHunterRecomp

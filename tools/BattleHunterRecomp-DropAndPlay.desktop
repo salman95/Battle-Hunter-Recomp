@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Battle Hunter — Drop & Play
+GenericName=BattleHunterRecomp
+Comment=Drop your Battle Hunter .ecm/.bin/.cue here — it auto-recompiles and plays
+Exec=python3 @REPO@/tools/drop_and_play.py %f
+Path=@REPO@
+Icon=@REPO@/assets/psxrecomp.png
+Terminal=true
+Categories=Game;Emulator;
+MimeType=application/x-ecm;application/x-cd-image;application/x-iso9660-image;
+Keywords=playstation;psx;ps1;battle hunter;recomp;
+StartupWMClass=BattleHunter_Recompiled
