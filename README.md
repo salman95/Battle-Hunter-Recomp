@@ -22,6 +22,31 @@ music tracks playing at the right moments, on a real 8BitDo controller.
 plain-English explanation of the whole project (how the disc layout was reconstructed, how the
 translation works, how it was tested).
 
+## Quick start
+
+**No checkout, no setup** — download **`BattleHunter-Recomp-Launcher-x86_64.AppImage`** from the
+**[Releases](../../releases)** page, then:
+
+```sh
+chmod +x BattleHunter-Recomp-Launcher-x86_64.AppImage
+./BattleHunter-Recomp-Launcher-x86_64.AppImage   # opens the launcher
+```
+
+The whole thing is three clicks:
+
+| | You do | What happens |
+|---|---|---|
+| **1 · Insert** | pick your `BATTLE HUNTER.iso.ecm` (or just drag it in) | your file never leaves the machine |
+| **2 · Recompile** | press the button | the game is rebuilt **from your disc, on your PC** — progress bar + live console, ≈ 2–10 min, once |
+| **3 · Play** | press Play (lights up when ready) | boots the recompiled game — later launches are instant |
+
+> **Why can't you just download the game?** This project ships no game content (it's copyrighted) —
+> so the launcher *makes* the PC version locally from **your** disc. See
+> [What "Recompile" actually does](#what-recompile-actually-does).
+
+Prefer a git clone, a terminal pipeline, or doing each step by hand? All routes:
+[Steps (from zero to playing)](#steps-from-zero-to-playing).
+
 ## Screenshots
 
 <sub>Captured from the recompiled game running natively on PC (software renderer, native 320×240
@@ -48,7 +73,8 @@ and digests are facts about the binary, not expression — this is the same meta
 project ships.
 
 The consequence: **you supply the game, you run the generator, you build.** It's a few minutes of fully
-automated work — one *Recompile* click in the launcher (or one command) — documented below.
+automated work — one *Recompile* click in the launcher, whether you run it from the AppImage or a git
+checkout — documented below.
 
 ## Requirements
 
@@ -69,20 +95,15 @@ automated work — one *Recompile* click in the launcher (or one command) — do
 
 ### The easiest way — the AppImage (no checkout needed)
 
-Grab **`BattleHunter-Recomp-Launcher-x86_64.AppImage`** from this repo's
-[Releases](../../releases) page, then:
+The AppImage — downloadable from the [Releases](../../releases) page (see
+[Quick start](#quick-start) up top) — is the whole project in one file: the repo scaffold (config,
+seeds, framework sources, tools) **plus** its own Python + GTK runtime, so it runs with nothing
+installed. It carries **no game content** — same distribution model as everything else here.
 
-```sh
-chmod +x BattleHunter-Recomp-Launcher-x86_64.AppImage
-./BattleHunter-Recomp-Launcher-x86_64.AppImage
-```
-
-That's the whole install. One file — no git clone, no python setup. On first run it deploys its scaffold
-(config, seeds, the framework sources, the tools) to `~/.local/share/BattleHunterRecomp` and opens the
-launcher: **insert your `.ecm`, press Recompile, press Play** — exactly the three-step flow below. Your
-disc image, the generated C, the compiled game and your saves all live in that work directory (override
-the location with `BH_WORKDIR=…`). The AppImage itself carries **no game content** — same distribution
-model as the rest of this project.
+On first run it deploys the scaffold to a work directory and opens the launcher for the same
+three-click flow: **insert your `.ecm`, press Recompile, press Play**. Your disc image, the
+generated C, the compiled game and your saves all live in that work directory —
+`~/.local/share/BattleHunterRecomp` by default, override with `BH_WORKDIR=…`.
 
 Notes:
 - Recompiling needs build tools (cmake/ninja + a C compiler). If the system has none, the launcher
@@ -119,12 +140,42 @@ Then open **“Battle Hunter — Launcher”** from your app grid / desktop icon
    icon also works — it opens with the file pre-selected.
 2. **Recompile** — one button runs the whole pipeline with a progress bar (per step *and* per compile
    unit) and a console you can scroll through; a revision that isn't the verified USA disc gets a clear
-   warning, never a silent guess. Cancel any time.
+   warning, never a silent guess. Cancel any time. See
+   [What "Recompile" actually does](#what-recompile-actually-does) below for a plain-English map of
+   the progress bar.
 3. **Play** — enabled once a build exists (it also lights up right away if the game is already compiled).
    The game runs independently of the launcher window.
 
 The GUI needs GTK3 via PyGObject (see *Requirements*). No GUI on the machine? Use the terminal tool
 below — same pipeline.
+
+### What "Recompile" actually does
+
+One button, four phases — this is exactly what the progress bar walks through:
+
+| Progress bar | Phase | In plain English |
+|---|---|---|
+| **0–8 %** | Prepare | Your `.ecm` is a *squeezed* disc image (error-correction bytes removed to shrink it). This phase un-squeezes it back to a raw disc image, then fingerprints it to confirm it's the genuine USA *Battle Hunter* disc — a different revision gets a warning, never a silent guess. |
+| **8–55 %** | Translate | The PlayStation's machine code is read off **your** disc and rewritten as ordinary C source code, on your machine. This is the *recompilation* itself — nothing is downloaded, and it's why the repo can ship zero game code. |
+| **55–95 %** | Compile | A normal PC compiler turns that C into a normal executable — `BattleHunter_Recompiled` — just like compiling any other program. |
+| **95–100 %** | Finish | Writes your settings (controller, disc) and a **stamp**. From now on the stamp proves the build matches your disc + this framework, so launches skip straight to *Play* — that's why only the first run takes minutes. |
+
+Things worth knowing:
+
+- **It's fully automatic and one-time.** Watch the console scroll if you're curious; cancel if you
+  change your mind. A fresh full run was measured at just under **2 minutes** on a fast desktop,
+  ~10 minutes on an older laptop.
+- **Your files, your machine.** The disc image is staged to `disc/BattleHunter.bin` + `.cue` (never
+  modified), the generated C lands in `generated/`, the game + saves live in `build-release/`.
+  Nothing is uploaded anywhere.
+- **Forcing a rebuild** — delete `build-release/.bh_stamp` (or just pick a different disc file and
+  press Recompile again); picking the same file again is always the fast path.
+- **No build tools installed?** With the AppImage, the launcher downloads the framework's bundled
+  toolchain (cmake/ninja/clang) on first recompile — one-time, needs network.
+
+<p align="center">
+<img src="docs/img/pipeline.png" width="88%" alt="The recompile pipeline (same for the GUI launcher and Drop &amp; Play): your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
+</p>
 
 #### Terminal alternative — Drop & Play
 
@@ -152,15 +203,9 @@ Whichever way you select it, the tool then does **all** of the below, by itself:
 First run ≈ 2–10 minutes depending on your machine; after that it's seconds per launch. Add `--no-play`
 to stop after the build (e.g. to inspect the result) instead of booting the game.
 
-<p align="center">
-<img src="docs/img/pipeline.png" width="88%" alt="The recompile pipeline (same for the GUI launcher and Drop &amp; Play): your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
-</p>
-
-Where things land: your image is staged to `disc/BattleHunter.bin` + `disc/BattleHunter.cue` (never
-modified), the translation goes to `generated/` (gitignored), the game + saves live under
-`build-release/`. Progress streams live at every step — progress bar + console in the launcher,
-timed banners in the terminal tool — and any failure stops with the full log visible instead of a
-silent error.
+Where things land and what failure looks like: any error stops the run with the full log visible
+instead of a silent error; the staged image, generated C, and builds live in the same places the
+[launcher](#what-recompile-actually-does) uses.
 
 <details>
 <summary>Self-test (what CI runs after install):</summary>
