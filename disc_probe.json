@@ -1,0 +1,29 @@
+{
+  "cue_path": "disc/BattleHunter.cue",
+  "cue_name": "BattleHunter.cue",
+  "bin_name": "BattleHunter.bin",
+  "track_count": 5,
+  "data_track_size": 86003232,
+  "data_track_md5": "c7fd6f950777952e6d648bd8a889af4c",
+  "data_track_sha1": "00c0c8319d5b45caa41cc2ea8902089ad03e125e",
+  "data_track_crc32": "3357c56f",
+  "boot_exe": "SLUS_013.35",
+  "serial": "SLUS-01335",
+  "serial_exe": "SLUS_013.35",
+  "volume_id": "HUNTER",
+  "display_name": "BattleHunter",
+  "load_address": "0x00010000",
+  "entry_pc": "0x000863FC",
+  "text_size": "0x000AB800",
+  "stack_base": "0x801FFFF0",
+  "require_cue": true,
+  "required_disc_fp": "127d237b2d45f3f6a06239bbbfeea8ad0d2c56b4e65c49634f81aaf12d87475d",
+  "boot_exe_sha256": "c08d4c733924ca2250d66f3a8f2dc5afa53a249d63da48b5e497517267f9e0f0",
+  "seed_count": 717,
+  "warnings": [],
+  "notes": [
+    "entry_pc/load_address/text_size/stack_base taken from PS-X EXE header.",
+    "seeds are first-pass boot-EXE JAL targets (+ entry); expect to grow as overlays / runtime paths are discovered.",
+    "required_disc_fp is psxrecomp-toc-v1 (matches runtime DiscIdentity)."
+  ]
+}

@@ -1,0 +1,54 @@
+# Autofilled by tools/new_project_layout/probe_disc.py from your legal dump.
+# Review before shipping. Runtime quirks / overlay seeds still need hand work.
+
+[game]
+name = "BattleHunter"
+id = "SLUS-01335"
+players = 2
+exe = "disc/SLUS_013.35"
+disc = "disc/BattleHunter.cue"
+load_address = "0x00010000"
+entry_pc = "0x000863FC"
+text_size = "0x000AB800"
+stack_base = "0x801FFFF0"
+
+# Digests are for data Track 01 (first BINARY FILE / TRACK 01).
+[prepare_disc]
+out_dir = "disc"
+bin_name = "BattleHunter.bin"
+cue_name = "BattleHunter.cue"
+boot_exe = "SLUS_013.35"
+known_sizes = [86003232]
+known_md5 = [
+  "c7fd6f950777952e6d648bd8a889af4c",
+]
+known_sha1 = [
+  "00c0c8319d5b45caa41cc2ea8902089ad03e125e",
+]
+known_crc32 = [
+  "3357c56f",
+]
+
+[recompiler]
+seeds = "seeds/ghidra_funcs.txt"
+out_dir = "generated"
+strict = true
+
+[runtime]
+window_title = "BattleHunter Recompiled"
+memcard_dir = "saves"
+overlay_cache = true
+
+[video]
+renderer = "opengl"
+aspect_ratio = "4:3"
+
+[controller]
+default_mode = "digital"
+
+# Online mount gate: digests + track count + optional TOC fingerprint
+# (see docs/NETPLAY.md).
+[netplay]
+require_cue = true
+required_tracks = 5
+required_disc_fp = "127d237b2d45f3f6a06239bbbfeea8ad0d2c56b4e65c49634f81aaf12d87475d"
