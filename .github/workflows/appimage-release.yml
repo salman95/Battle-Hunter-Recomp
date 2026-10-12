@@ -1,0 +1,66 @@
+name: AppImage release
+
+# Builds the Battle Hunter Recomp Launcher AppImage and attaches it to a
+# GitHub release. Publish a release by pushing a tag:
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# (workflow_dispatch builds the same artifact without releasing, so you can
+#  test the pipeline from the Actions tab.)
+#
+# The AppImage bundles the repo scaffold (config, seeds, framework sources,
+# tools) plus a portable Python + GTK3 runtime — but, as everywhere in this
+# project, NO game content. Users insert their own .ecm in the launcher.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (with pinned submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0        # tags for `git describe` → REVISION
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi gir1.2-gtk-3.0 python3-cairo \
+            squashfs-tools rsync file xvfb curl
+
+      - name: Build the AppImage
+        run: sh tools/make_appimage.sh
+
+      - name: Smoke-test it (fresh work dir, headless display)
+        run: |
+          BH_WORKDIR="$RUNNER_TEMP/bh-work" xvfb-run -a \
+            ./dist/BattleHunter-Recomp-Launcher-x86_64.AppImage --smoke
+          test -f "$RUNNER_TEMP/bh-work/tools/launcher_gui.py" \
+            || { echo "scaffold was not deployed"; exit 1; }
+
+      - name: Upload artifact (every run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BattleHunter-Recomp-Launcher-x86_64
+          path: |
+            dist/*.AppImage
+            dist/*.sha256
+          if-no-files-found: error
+
+      - name: Attach to the GitHub release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/*.sha256
+          generate_release_notes: true

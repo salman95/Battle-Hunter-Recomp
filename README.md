@@ -48,7 +48,7 @@ and digests are facts about the binary, not expression — this is the same meta
 project ships.
 
 The consequence: **you supply the game, you run the generator, you build.** It's a few minutes of fully
-automated work, all documented below.
+automated work — one *Recompile* click in the launcher (or one command) — documented below.
 
 ## Requirements
 
@@ -56,6 +56,9 @@ automated work, all documented below.
   C++20; the runtime is C99/C++17). On Debian/Ubuntu: `sudo apt install git build-essential cmake
   ninja-build python3`. On Arch: `sudo pacman -S git base-devel cmake ninja python`.
 - SDL3 — fetched automatically by CMake if no system package is found (network required once).
+- For the **GUI launcher** only: GTK3 via PyGObject — on Debian/Ubuntu
+  `sudo apt install python3-gi gir1.2-gtk-3.0`, on Arch `sudo pacman -S gtk3 python-gobject`.
+  (Everything works from the terminal without it.)
 - **Your own copy of Battle Hunter (USA)**. The build checks that your disc matches the supported
   revision (data track SHA-1 `00c0c831…`, 86,003,232 bytes) — if yours differs, the generator will
   tell you instead of guessing.
@@ -64,22 +67,69 @@ automated work, all documented below.
 
 ## Steps (from zero to playing)
 
-### The easy way — Drop & Play (recommended)
+### The easiest way — the AppImage (no checkout needed)
 
-The Drop & Play tool **selects your game file — including the squeezed `.ecm` format — and automates
-the entire recompile**, from raw file to running game. You never touch a build command.
+Grab **`BattleHunter-Recomp-Launcher-x86_64.AppImage`** from this repo's
+[Releases](../../releases) page, then:
+
+```sh
+chmod +x BattleHunter-Recomp-Launcher-x86_64.AppImage
+./BattleHunter-Recomp-Launcher-x86_64.AppImage
+```
+
+That's the whole install. One file — no git clone, no python setup. On first run it deploys its scaffold
+(config, seeds, the framework sources, the tools) to `~/.local/share/BattleHunterRecomp` and opens the
+launcher: **insert your `.ecm`, press Recompile, press Play** — exactly the three-step flow below. Your
+disc image, the generated C, the compiled game and your saves all live in that work directory (override
+the location with `BH_WORKDIR=…`). The AppImage itself carries **no game content** — same distribution
+model as the rest of this project.
+
+Notes:
+- Recompiling needs build tools (cmake/ninja + a C compiler). If the system has none, the launcher
+  automatically downloads the framework's bundled toolchain on first recompile (one-time, network).
+- Built on Ubuntu 24.04, so it wants a reasonably modern glibc (≥ 2.39): Ubuntu 24.04+, Debian 13+,
+  Fedora 40+, Arch/CachyOS, openSUSE Tumbleweed, Mint 22.x. On older distros use the git-checkout
+  routes below.
+- Updating: download the new AppImage — on next launch the work dir's scaffold refreshes automatically
+  (your staged disc, builds and saves are never touched), and the next Recompile picks up the change.
+- Maintainers: releases are built by CI — push a tag (`git tag v1.0.0 && git push origin v1.0.0`) and
+  the [AppImage release workflow](.github/workflows/appimage-release.yml) builds, smoke-tests, and
+  attaches the AppImage to a new GitHub release.
+
+### The easy way — the launcher (recommended for git users)
+
+The launcher is a small GUI: **open it, insert your game file, press Recompile, press Play.** It wraps the
+same pipeline the terminal tool uses — unsqueeze, verify, translate to C, compile — with a live **progress
+bar** and a scrolling **console output** showing everything that happens. First run ≈ 2–10 minutes
+depending on your machine (a from-scratch test on a fast desktop — 86 MB ECM in, everything rebuilt —
+took just under 2 minutes); after that, launches are seconds.
 
 ```sh
 # from zero:
 git clone --recurse-submodules <this-repo-url> BattleHunterRecomp
 cd BattleHunterRecomp
-sh tools/install-drop-and-play.sh   # one-time: registers the launcher with your desktop
+sh tools/install-drop-and-play.sh   # one-time: registers the launchers with your desktop
 ```
 
-#### Recompiling from your `.ecm` file (the ECM select feature)
+Then open **“Battle Hunter — Launcher”** from your app grid / desktop icon (or run
+`python3 tools/launcher_gui.py`) and:
 
-Select your `BATTLE HUNTER.iso.ecm` (or a `.bin`/`.cue` dump) by **any** of these four ways — they're
-all the same thing to the tool:
+1. **Insert the game** — click *Browse…* and pick your `BATTLE HUNTER.iso.ecm` (a `.bin`/`.cue` dump works
+   too), or simply drag the file onto the launcher window. Dropping the `.ecm` onto the desktop launcher
+   icon also works — it opens with the file pre-selected.
+2. **Recompile** — one button runs the whole pipeline with a progress bar (per step *and* per compile
+   unit) and a console you can scroll through; a revision that isn't the verified USA disc gets a clear
+   warning, never a silent guess. Cancel any time.
+3. **Play** — enabled once a build exists (it also lights up right away if the game is already compiled).
+   The game runs independently of the launcher window.
+
+The GUI needs GTK3 via PyGObject (see *Requirements*). No GUI on the machine? Use the terminal tool
+below — same pipeline.
+
+#### Terminal alternative — Drop & Play
+
+The Drop & Play tool runs the identical pipeline in a terminal. Select your game file by **any** of
+these four ways:
 
 | # | How you select the file | What you'll see |
 |---|---|---|
@@ -99,16 +149,18 @@ Whichever way you select it, the tool then does **all** of the below, by itself:
 7. **Stamps** your disc + framework — selecting the same file again is **seconds**, straight to the game
    (delete `build-release/.bh_stamp` to force a rebuild).
 
-First run ≈ 10 minutes with live progress; after that it's seconds per launch.
+First run ≈ 2–10 minutes depending on your machine; after that it's seconds per launch. Add `--no-play`
+to stop after the build (e.g. to inspect the result) instead of booting the game.
 
 <p align="center">
-<img src="docs/img/pipeline.png" width="88%" alt="Drop &amp; Play pipeline: your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
+<img src="docs/img/pipeline.png" width="88%" alt="The recompile pipeline (same for the GUI launcher and Drop &amp; Play): your disc image → unsqueeze (bundled unecm) → BIN + verified cue sheet → translate (psxrecomp: MIPS to C) → compile (cmake + gcc) → play (native executable)">
 </p>
 
 Where things land: your image is staged to `disc/BattleHunter.bin` + `disc/BattleHunter.cue` (never
 modified), the translation goes to `generated/` (gitignored), the game + saves live under
-`build-release/`. Progress is printed with a timer at each step; any failure stops with the full log
-visible instead of a silent error.
+`build-release/`. Progress streams live at every step — progress bar + console in the launcher,
+timed banners in the terminal tool — and any failure stops with the full log visible instead of a
+silent error.
 
 <details>
 <summary>Self-test (what CI runs after install):</summary>
@@ -116,6 +168,9 @@ visible instead of a silent error.
 ```sh
 # full pipeline + 25s headless boot check, then exits:
 python3 tools/drop_and_play.py "/path/to/BATTLE HUNTER.iso.ecm" --soak 25
+
+# GUI launcher smoke test — window builds, renders briefly, exits cleanly:
+python3 tools/launcher_gui.py --smoke
 ```
 
 </details>
@@ -227,10 +282,14 @@ means "first connected pad", or pin a specific one by GUID.
 ### Updating
 
 `git pull --recurse-submodules`, then re-run steps 3–4 (the generator is incremental; unchanged shards
-are reused).
+are reused). Easier: just press **Recompile** in the launcher (or re-run Drop & Play) — the stamp
+notices that the framework changed and rebuilds only what's needed.
 
 ## Troubleshooting
 
+- **The GUI launcher won't start** — it needs GTK3 via PyGObject: Debian/Ubuntu
+  `sudo apt install python3-gi gir1.2-gtk-3.0`, Arch `sudo pacman -S gtk3 python-gobject`.
+  The terminal Drop & Play tool works without a GUI.
 - **"known disc digests do not match"** — your dump is a different revision/region. This project
   targets the USA release (SLUS-01335). Check the data track size: 86,003,232 bytes.
 - **No audio** — check your system's pipewire/pulse setup; the runtime outputs via SDL3.
@@ -246,8 +305,16 @@ game.toml            config the generator/runtime read (disc identity, seeds, qu
 seeds/               function addresses used as translation discovery hints
 codegen_setup.c/.h   title-side codegen hooks
 CMakeLists.txt       thin build glue (adds the runtime target)
+tools/
+  launcher_gui.py     the GUI launcher (insert .ecm → Recompile w/ progress bar +
+                      console → Play; GTK3, no build needed)
+  bh_pipeline.py      the shared pipeline library both front-ends drive
+                      (unsqueeze → verify → generate → compile → launch)
+  drop_and_play.py    the terminal front-end over the same pipeline
+  make_appimage.sh + appimage_collect.py   build the one-file AppImage
+  install-drop-and-play.sh + *.desktop   desktop registration for both
 psxrecomp/           submodule → the framework (pinned)
-recomp-ui/           submodule → the launcher UI (pinned)
+recomp-ui/           submodule → the in-game launcher UI (pinned)
 docs/                the plain-English PDF report + img/ (screenshots, pipeline diagram)
 generated/          (NOT committed — you create it in step 3)
 disc/                (NOT committed — your dump goes here)
