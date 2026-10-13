@@ -49,13 +49,15 @@ Prefer the plain zip over an AppImage, or building from source?
 
 ## Screenshots
 
-<sub>Captured from the recompiled game running natively on PC (software renderer, native 320×240
-VRAM, upscaled 2×). *Battle Hunter* and its artwork remain the property of their original creators.</sub>
+<p align="center">
+<img src="docs/img/shot-launcher.png" width="41%" alt="The launcher dashboard"> <img src="docs/img/shot-settings.png" width="41%" alt="Settings — Display">
+</p>
+<p align="center"><sub>The launcher — first run asks for your dump, then PLAY · Settings → Display: window size, <b>aspect ratio (4:3 / 16:9)</b>, internal resolution (native…8K / match display), fullscreen</sub></p>
 
 <p align="center">
 <img src="docs/img/shot-title.png" width="31%" alt="Title screen"> <img src="docs/img/shot-menu.png" width="31%" alt="Main menu"> <img src="docs/img/shot-story.png" width="31%" alt="Story scene">
 </p>
-<p align="center"><sub>Title screen · main menu (OST playing) · story dialogue</sub></p>
+<p align="center"><sub>In game: title screen · main menu (OST playing) · story dialogue — captured from the recompiled game running natively on PC (software renderer, native 320×240 VRAM, upscaled 2×). *Battle Hunter* and its artwork remain the property of their original creators.</sub></p>
 
 ---
 
