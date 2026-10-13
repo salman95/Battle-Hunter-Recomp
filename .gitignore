@@ -87,9 +87,3 @@ starvation_dump.jsonl
 !/catalog_identity.json
 !/disc_probe.json
 !/.recomp.json
-
-# Generated game C (decision: NOT shipped) — regenerating from your own
-# disc keeps this repo free of game-derived code:
-#   python3 psxrecomp/psxrecomp_cli.py generate --config game.toml \
-#       --project-root . --disc disc/BattleHunter.cue
-/generated/

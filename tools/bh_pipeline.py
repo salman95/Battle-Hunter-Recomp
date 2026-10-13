@@ -544,7 +544,14 @@ def stamp_write(disc_sha1: str, rep: Reporter) -> None:
 # ---------------------------------------------------------------- launch
 
 def game_cmd() -> list[str]:
-    return [str(EXE), "--no-launcher", "--disc", str(DISC_CUE.resolve())]
+    # Boot WITHOUT --no-launcher: the game's own Dear ImGui pre-boot launcher
+    # (recomp-ui) opens first — box art, controller, and the Game Settings
+    # popup (borderless fullscreen, …) — and only starts the game when the
+    # player presses PLAY there. The static launcher stays the build/entry
+    # point; the ImGui launcher is where you configure and press PLAY. Users
+    # who want to skip it check "Skip launcher on boot" inside that ImGui
+    # launcher, which then takes the --no-launcher path for future boots.
+    return [str(EXE), "--disc", str(DISC_CUE.resolve())]
 
 
 def launch_game(rep: Reporter, soak: int = 0) -> None:
