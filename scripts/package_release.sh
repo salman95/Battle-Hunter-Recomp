@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Thin wrapper around the shared psxrecomp bundled-release packager.
-# Autofilled by tools/new_project_layout/setup_project.{sh,ps1}.
+# Rendered from psxrecomp/tools/new_project_layout/templates/package_release.sh.in.
 #
 # Ships the COMPILED game built from this repo's committed generated/ C:
 # executable, runtime data, bundled OpenBIOS, mod catalog, overlay toolchain.
@@ -9,7 +9,9 @@
 # Usage:
 #   scripts/package_release.sh <build-dir> <artifact-tag> [recompiler-build-dir]
 #
-# Writes: dist/battlehunter-<VERSION>-<artifact-tag>.zip
+# Writes: dist/bh-<VERSION>-<artifact-tag>.zip
+# (or, with STAGE_ONLY=1, just the validated dist/stage-game-<artifact> payload
+# that scripts/package_appimage.sh wraps — no ZIP compression.)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,15 +33,18 @@ chmod +x "${PACKAGER}" 2>/dev/null || true
 
 EXTRA=()
 # Overlay shard cache. It is compiled FROM THE DISC, so CI (no disc) cannot
-# build one: the committed static AOT shard is linked into the executable and
-# the bundled overlay_toolchain/ compiles the rest from the player's disc at
-# runtime. A developer packaging locally with a cache can ship it instead:
+# build one: the bundled overlay_toolchain/ compiles everything from the
+# player's disc at runtime. A developer packaging locally with a cache can
+# ship it instead:
 #   PSX_OVERLAY_CACHE_ROOT=/path/to/cache scripts/package_release.sh ...
 if [[ -n "${PSX_OVERLAY_CACHE_ROOT:-}" ]]; then
   EXTRA+=(--overlay-cache-root "${PSX_OVERLAY_CACHE_ROOT}")
 else
   EXTRA+=(--ship-without-overlay-cache-because \
-    "no disc at package time: the committed static AOT shard is compiled in and overlay_toolchain/ autocompiles the rest on the player's machine")
+    "no disc at package time: overlay_toolchain/ autocompiles overlays from the player's own disc on their machine")
+fi
+if [[ "${STAGE_ONLY:-0}" == "1" ]]; then
+  EXTRA+=(--stage-only)
 fi
 # Extra docs shipped at the zip root (DISC.md tells players which dump works).
 for _doc in DISC.md; do
@@ -53,10 +58,10 @@ exec bash "${PACKAGER}" \
   --root "${ROOT}" \
   --build-dir "${BUILD_DIR}" \
   --artifact "${ARTIFACT_TAG}" \
-  --zip-prefix battlehunter \
+  --zip-prefix bh \
   --exe-name BattleHunter_Recompiled \
-  --display-name "BattleHunter Recompiled" \
+  --display-name "Battle Hunter Recompiled" \
   --recompiler-build "${RECOMPILER_BUILD}" \
   --version-env RELEASE_VERSION \
-  --disc-hint "your legally owned BattleHunter disc" \
+  --disc-hint "your own Battle Hunter dump (USA, SLUS-01335): point the launcher at your .cue/.bin" \
   "${EXTRA[@]}"

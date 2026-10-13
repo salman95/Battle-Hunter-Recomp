@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Battle Hunter Recompiled
+GenericName=PlayStation recompilation
+Comment=Play Battle Hunter (SLUS-01335) natively — point it at your own disc dump
+Exec=battle-hunter-recompiled
+Icon=battle-hunter-recompiled
+Terminal=false
+Categories=Game;Emulator;
+Keywords=playstation;psx;ps1;battle hunter;recomp;recompiled;
+StartupWMClass=BattleHunter_Recompiled

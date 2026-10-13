@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """bh_pipeline — the Battle Hunter bring-up pipeline as a library.
 
-Everything Drop & Play and the GUI launcher need, in one place:
+Everything the developer pipeline needs, in one place:
 
   1. prepare   your game file (.ecm/.bin/.cue) → disc/BattleHunter.{bin,cue}
                (builds the bundled unecm on first use, verifies the disc)
   2. generate  translate YOUR disc into C    (psxrecomp generate)
   3. build     compile the native game       (cmake + ninja)
-  4. play      boot it
+  4. play      boot it (opens the recomp-ui launcher)
 
-Front-ends drive it through a Reporter (see below) so both a terminal and a
-GUI can show the same steps with live progress:
+A DEVELOPER tool: releases ship the compiled game (the translated C is
+committed under generated/; players download and play — see
+psxrecomp/docs/ci/BUNDLED_RELEASES.md). This pipeline regenerates that C
+from a developer's own disc and rebuilds.
+
+Front-ends drive it through a Reporter so a terminal and a GUI can show the
+same steps with live progress:
 
     import bh_pipeline as bh
 
@@ -22,8 +27,7 @@ GUI can show the same steps with live progress:
                     cancel=bh.CancelToken(), auto_launch=False)
 
 run_pipeline() raises PipelineError on failure and Cancelled if the cancel
-token was tripped mid-step. Nothing game-derived ships in this repository —
-steps 2–3 rebuild all of it locally, from the user's file.
+token was tripped mid-step.
 """
 
 from __future__ import annotations

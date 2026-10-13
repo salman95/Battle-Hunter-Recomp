@@ -1,0 +1,39 @@
+#!/bin/sh
+# Battle Hunter Recompiled — AppRun (title-rendered input for
+# psxrecomp/tools/package_appimage.sh).
+#
+# The bundled game is a finished product that both reads and writes beside
+# itself: settings.toml, input.ini, memory cards, overlay captures, plus the
+# shipped payload (game.toml, assets/, bundled OpenBIOS, mods/bundled
+# catalog, overlay_toolchain/). The AppImage mount is read-only, so AppRun
+# stages that payload — usr/share/battle-hunter plus the deployed executable
+# from usr/bin — into a writable data directory once per version, and runs
+# the game from there. User data (settings, cards, captures) survives
+# updates: staging replaces files the payload owns and never deletes extras.
+set -eu
+
+APPDIR="${APPDIR:-$(dirname "$(readlink -f "$0")")}"
+EXE_NAME=BattleHunter_Recompiled
+PAYLOAD_NAME=battle-hunter
+DATA="${BH_DATADIR:-${XDG_DATA_HOME:-$HOME/.local/share}/BattleHunterRecomp}"
+VERSION="$(cat "$APPDIR/usr/share/$PAYLOAD_NAME/psx_game_version.txt" 2>/dev/null || echo unknown)"
+
+STAMP="$DATA/.appimage-version"
+if [ ! -x "$DATA/$EXE_NAME" ] || [ ! -f "$STAMP" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$VERSION" ]; then
+    echo "staging bundled game $VERSION -> $DATA (once per version)…" >&2
+    mkdir -p "$DATA"
+    # Payload: game.toml, assets/, bios/, mods/, overlay_toolchain/, licenses,
+    # version stamp. cp -a keeps the packager's modes and symlinks.
+    cp -a "$APPDIR/usr/share/$PAYLOAD_NAME/." "$DATA/"
+    # The linuxdeploy-deployed executable from usr/bin (validated + bound at
+    # packaging time; copied verbatim).
+    cp -a "$APPDIR/usr/bin/$EXE_NAME" "$DATA/$EXE_NAME"
+    printf '%s\n' "$VERSION" > "$STAMP"
+fi
+
+cd "$DATA"
+# Anchor the runtime on the writable copy. With $APPIMAGE set the runtime
+# would pin its exe dir to the (read-only) AppImage's own folder for settings,
+# cards and captures; the staged copy is where all of those belong.
+unset APPIMAGE
+exec "$DATA/$EXE_NAME" "$@"

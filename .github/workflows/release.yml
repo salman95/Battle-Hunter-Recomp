@@ -1,0 +1,428 @@
+name: Release builds
+
+# Bundled release: CI builds and ships the COMPILED game from this repo's
+# committed generated/ C (psxrecomp/docs/ci/BUNDLED_RELEASES.md). Players
+# download, point the launcher at their own disc dump, and play — nothing is
+# generated or compiled on their machine.
+#
+# Artifacts per tag / dispatch:
+#   dist/bh-<version>-linux-x64.zip             — the compiled game payload
+#   dist/BattleHunter-Recompiled-v<ver>-x86_64.AppImage (+ .sha256)
+#
+# Publish a release by pushing a tag (git tag v1.0.0 && git push origin v1.0.0)
+# or via workflow_dispatch (empty version = auto-bump). The zip and AppImage
+# carry the same validated payload: executable, runtime data, bundled
+# OpenBIOS, mod catalog, overlay toolchain — never sources, generated C,
+# emitters, or dumps.
+#
+# Windows/macOS builds are a deliberate follow-up (the framework template
+# ships a full matrix); this workflow covers the Linux x64 release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Release version (e.g. 0.1.0 or v0.1.0). Leave empty to auto-bump
+          from the latest vX.Y.Z git tag (see bump).
+        required: false
+        type: string
+        default: ''
+      bump:
+        description: 'When version is empty, which semver component to increment'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      publish:
+        description: 'Create git tag vX.Y.Z and GitHub Release'
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: bh-release-${{ github.event_name }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  prepare:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - name: Checkout (tags for auto-bump)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Normalize version / tag
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RAW="${{ github.event.inputs.version }}"
+            BUMP="${{ github.event.inputs.bump }}"
+            PUBLISH="${{ github.event.inputs.publish }}"
+          else
+            RAW="${{ github.ref_name }}"
+            BUMP="patch"
+            PUBLISH="true"
+          fi
+          RAW="$(printf '%s' "${RAW}" | tr -d '[:space:]')"
+          if [[ -z "${RAW}" ]]; then
+            LATEST="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)"
+            BASE="${LATEST#v}"
+            if [[ -z "${BASE}" && -f VERSION ]]; then
+              BASE="$(tr -d '[:space:]' <VERSION)"
+              BASE="${BASE#v}"
+            fi
+            BASE="${BASE:-0.0.0}"
+            BASE="${BASE%%[-+]*}"
+            IFS=. read -r MA MI PA <<<"${BASE}"
+            MA="${MA:-0}"; MI="${MI:-0}"; PA="${PA:-0}"
+            case "${BUMP}" in
+              major) MA=$((MA + 1)); MI=0; PA=0 ;;
+              minor) MI=$((MI + 1)); PA=0 ;;
+              *)     PA=$((PA + 1)) ;;
+            esac
+            VER="${MA}.${MI}.${PA}"
+            TAG="v${VER}"
+            echo "Auto-bumped ${BUMP}: ${LATEST:-none} → ${VER}"
+          else
+            VER="${RAW#v}"
+            if [[ ! "${VER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.+-][A-Za-z0-9.+-]*)?$ ]]; then
+              echo "::error::invalid version '${RAW}' (want X.Y.Z or vX.Y.Z)"
+              exit 1
+            fi
+            TAG="v${VER}"
+          fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && \
+             git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::tag ${TAG} already exists — bump again or pass an explicit version"
+            exit 1
+          fi
+          echo "version=${VER}" >>"$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >>"$GITHUB_OUTPUT"
+          echo "publish=${PUBLISH}" >>"$GITHUB_OUTPUT"
+          echo "Using version ${VER} (tag ${TAG}), publish=${PUBLISH}"
+
+  build:
+    name: linux-x64
+    needs: prepare
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Pin VERSION
+        shell: bash
+        run: printf '%s\n' "${RELEASE_VERSION}" >VERSION
+
+      - name: Record framework revisions
+        shell: bash
+        run: bash psxrecomp/tools/ci/record_pins.sh
+
+      # game.toml, CMakeLists GEN_MARKER and codegen_setup.c each carry the
+      # boot-EXE name; the committed generated/ files are named after it.
+      - name: Lint boot-EXE name consistency
+        shell: bash
+        run: bash psxrecomp/tools/ci/check_boot_exe.sh .
+
+      # The release is built from COMMITTED C. Fail at the top when it is
+      # absent/untracked, or when a BIOS dump is in the tree.
+      - name: Verify committed game C
+        shell: bash
+        run: bash psxrecomp/tools/ci/check_generated.sh --root .
+
+      - name: Verify BIOS backend stamps
+        shell: bash
+        run: bash psxrecomp/tools/ci/check_bios_stamps.sh --framework psxrecomp
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          # X11 + xtst required when FetchContent builds SDL3 (XTEST).
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config zip unzip \
+            libgl1-mesa-dev libxtst-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+            libxss-dev libxkbcommon-dev libasound2-dev libpulse-dev \
+            libudev-dev libvulkan-dev glslc xvfb
+
+      - name: Verify Vulkan build tools
+        run: |
+          set -euo pipefail
+          command -v glslc
+          test -f /usr/include/vulkan/vulkan.h
+          echo "Vulkan headers + glslc OK (PSX_HAVE_VULKAN)"
+
+      # Ubuntu 24.04 has no libsdl3-dev; CMake FetchContents the pinned SDL3
+      # tarball. Prefetch with curl --http1.1 (CMake's HTTP/2 download from
+      # github.com release assets intermittently dies with REFUSED_STREAM).
+      - name: Cache SDL3 source
+        uses: actions/cache@v4
+        with:
+          path: .cache/sdl3-src
+          key: sdl3-3.4.10-src
+
+      - name: Prefetch SDL3 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=".cache/sdl3-src"
+          if [[ -f "${OUT}/CMakeLists.txt" ]]; then
+            echo "SDL3 source cache hit"
+          else
+            mkdir -p .cache
+            VER=3.4.10
+            SHA=12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785
+            URL="https://github.com/libsdl-org/SDL/releases/download/release-${VER}/SDL3-${VER}.tar.gz"
+            TAR=".cache/SDL3-${VER}.tar.gz"
+            curl -fsSL --http1.1 --retry 5 --retry-all-errors --retry-delay 2 -o "${TAR}" "${URL}"
+            echo "${SHA}  ${TAR}" | sha256sum -c -
+            rm -rf "${OUT}.extracting"; mkdir -p "${OUT}.extracting"
+            tar -xzf "${TAR}" -C "${OUT}.extracting"
+            INNER="$(find "${OUT}.extracting" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+            rm -rf "${OUT}"; mv "${INNER}" "${OUT}"; rm -rf "${OUT}.extracting"
+          fi
+          echo "PSX_SDL3_SOURCE_DIR=${GITHUB_WORKSPACE}/${OUT}" >>"$GITHUB_ENV"
+
+      # Emitters ship inside overlay_toolchain/ so the runtime can compile
+      # overlays (and a BIOS backend) from the player's disc at runtime.
+      - name: Emitter cache key
+        id: emitter_cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(git -C psxrecomp rev-parse HEAD)"
+          echo "key=linux-x64-emitters-${SHA}" >>"$GITHUB_OUTPUT"
+          echo "psxrecomp SHA ${SHA}"
+
+      - name: Cache emitters (build-recompiler)
+        id: cache_emitters
+        uses: actions/cache@v4
+        with:
+          path: build-recompiler
+          key: ${{ steps.emitter_cache.outputs.key }}
+
+      - name: Build recompiler tools (emitters)
+        if: steps.cache_emitters.outputs.cache-hit != 'true'
+        uses: ./psxrecomp/.github/actions/build-emitters
+
+      - name: Verify emitters present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d build-recompiler
+          count="$(find build-recompiler -type f \( -name 'psxrecomp-game*' -o -name 'psxrecomp-bios*' \) | wc -l | tr -d ' ')"
+          if [[ "${count}" -lt 2 ]]; then
+            echo "::error::expected psxrecomp-game + psxrecomp-bios under build-recompiler (found ${count})"
+            exit 1
+          fi
+
+      # The generated game C is ~144 MB; ccache turns a framework/UI bump
+      # into a near link-only rebuild.
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: game-linux-x64
+          max-size: 2G
+
+      - name: Configure & build the game
+        run: |
+          set -euo pipefail
+          export VULKAN_SDK=/usr
+          cmake -S . -B build-ci -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DPSXRECOMP_REQUIRE_GAME_C=ON \
+            -DPSXRECOMP_BIOS_STALE_FATAL=ON \
+            -DPSX_SETUP_WIZARD=ON \
+            -DPSX_GAME_VERSION="${RELEASE_VERSION}" \
+            -DFETCHCONTENT_SOURCE_DIR_SDL3="${PSX_SDL3_SOURCE_DIR}" \
+            2>&1 | tee build-ci-configure.log
+          # Assert the configure took the FULL path, not the setup-host one.
+          grep -q 'linking generated game C (full runtime)' build-ci-configure.log \
+            || { echo "::error::CMake did not link the generated game C"; exit 1; }
+          grep -qE 'BIOS backends linked: .*OpenBIOS' build-ci-configure.log \
+            || { echo "::error::OpenBIOS backend not linked (stamps?)"; exit 1; }
+          grep -q 'Vulkan backend: headers' build-ci-configure.log \
+            || { echo "::error::Vulkan backend not enabled"; exit 1; }
+          cmake --build build-ci --target psx-runtime -j"$(nproc)"
+          STAMP="build-ci/psx_game_version.txt"
+          BUILT="$(tr -d '[:space:]' <"${STAMP}")"
+          if [[ "${BUILT}" != "${RELEASE_VERSION}" ]]; then
+            echo "::error::version stamp ${BUILT} != RELEASE_VERSION ${RELEASE_VERSION}"
+            exit 1
+          fi
+          echo "version stamp ok: ${BUILT}"
+
+      - name: Package game zip
+        run: |
+          set -euo pipefail
+          export RELEASE_VERSION
+          scripts/package_release.sh build-ci linux-x64 build-recompiler
+          ls -la dist/
+
+      - name: Verify zip contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Assert the artifact, not the intent: every rule below was once
+          # "the packager does that by default" and shipped broken anyway.
+          ZIP=$(ls dist/bh-*-"linux-x64".zip | head -1)
+          echo "checking ${ZIP}"
+          LIST="$(unzip -Z1 "${ZIP}")"
+          # 1. It is a game: executable, bundled OpenBIOS, runtime data at the root.
+          for must in 'bios/openbios.bin' 'bios/OpenBIOS.LICENSE' 'game.toml' \
+                      'game_options.toml' 'psx_game_version.txt' 'assets/fonts/' \
+                      'assets/fonts/NOTICE.md' 'assets/img/NOTICE.md' \
+                      'licenses/recomp-ui-LICENSE' 'licenses/TinyCC-LICENSE.txt' \
+                      'mods/bundled/'; do
+            grep -q "^${must}" <<<"${LIST}" \
+              || { echo "::error::release zip lacks ${must}" >&2; exit 1; }
+          done
+          MANIFESTS=$(grep -c 'mods/bundled/.*/manifest\.toml' <<<"${LIST}" || true)
+          if [[ "${MANIFESTS}" -lt 1 ]]; then
+            echo "::error::release zip ships no mod catalog" >&2; exit 1
+          fi
+          # 2. It is NOT a build kit: no framework tree, CLI, emitters, sources,
+          #    generated C, or title scripts at the root.
+          for never in '^psxrecomp/' '^recomp-ui/' '^psxrecomp_cli.py' \
+                       '^psxrecomp-game' '^psxrecomp-bios' '^generated/' '^seeds/' \
+                       '^CMakeLists.txt' '^codegen_setup\.' '^src/' '^tools/' '^scripts/'; do
+            grep -qE "${never}" <<<"${LIST}" \
+              && { echo "::error::release zip contains build-kit content: ${never}" >&2; exit 1; } \
+              || true
+          done
+          if grep -E '\.c$' <<<"${LIST}" | grep -qv '^overlay_toolchain/'; then
+            echo "::error::release zip contains C sources outside overlay_toolchain/" >&2
+            exit 1
+          fi
+          # 3. No BIOS dump, disc, or memory card; the only image is OpenBIOS.
+          if grep -iE '(^|/)SCPH|\.(cue|iso|img|chd|mcd|mcr)$' <<<"${LIST}" | grep -qv '\.toml$'; then
+            echo "::error::release zip contains a BIOS dump, disc, or memory card" >&2; exit 1
+          fi
+          if grep -iE '\.bin$' <<<"${LIST}" | grep -qv '^bios/openbios.bin$'; then
+            echo "::error::release zip contains a .bin other than bios/openbios.bin" >&2; exit 1
+          fi
+          # 4. Per-machine mod state never ships.
+          if grep -q 'state\.toml' <<<"${LIST}"; then
+            echo "::error::release zip contains mods/state.toml (per-machine state)" >&2; exit 1
+          fi
+          if grep -q 'mods/installed/' <<<"${LIST}"; then
+            echo "::error::release zip contains mods/installed (per-machine installs)" >&2; exit 1
+          fi
+          if unzip -p "${ZIP}" 'mods/**/manifest.toml' 2>/dev/null \
+               | grep -Eq '^[[:space:]]*channel[[:space:]]*=[[:space:]]*"developer"'; then
+            echo "::error::release zip contains developer-channel mod packages" >&2; exit 1
+          fi
+          echo "zip verified: compiled game, bundled OpenBIOS, mod catalog, no kit / dumps / dev mods"
+
+      - name: Build the AppImage
+        run: scripts/package_appimage.sh build-ci build-recompiler
+
+      - name: Smoke-test the AppImage (fresh data dir, headless display)
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/bh-data
+        run: |
+          set -euo pipefail
+          APP="$(ls dist/BattleHunter-Recompiled-v*-x86_64.AppImage | head -1)"
+          chmod +x "${APP}"
+          set +e
+          xvfb-run -a timeout 25 "${APP}"
+          code=$?
+          set -e
+          # 124 = the timeout fired with the launcher still up (expected);
+          # 0 = the runtime shut down cleanly on the timeout's SIGTERM (fine
+          # too — it was alive until then). Anything else is a crash.
+          case "${code}" in
+            124|0) ;;
+            *) echo "::error::launcher exited early (${code})"; exit 1 ;;
+          esac
+          test -x "${XDG_DATA_HOME}/BattleHunterRecomp/BattleHunter_Recompiled" \
+            || { echo "::error::AppRun did not stage the payload"; exit 1; }
+          echo "AppImage smoke ok: launcher up, payload staged"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bh-linux-x64
+          path: |
+            dist/bh-*.zip
+            dist/*.AppImage
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: GitHub Release
+    needs: [prepare, build]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (for tagging on workflow_dispatch)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: false
+
+      - name: Flatten release files
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find artifacts -type f \( -name '*.zip' -o -name '*.AppImage' -o -name '*.sha256' \) \
+            -exec cp -v {} dist/ \;
+          ls -la dist/
+
+      - name: Ensure release tag exists
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            git tag -a "${TAG}" -m "Battle Hunter Recompiled ${TAG}"
+          fi
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git push origin "refs/tags/${TAG}"
+          fi
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: "Battle Hunter Recompiled ${{ needs.prepare.outputs.tag }}"
+          files: |
+            dist/bh-*.zip
+            dist/*.AppImage
+            dist/*.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          target_commitish: ${{ github.sha }}

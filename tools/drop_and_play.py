@@ -1,29 +1,30 @@
 #!/usr/bin/env python3
-"""Drop & Play — one-click bring-up for Battle Hunter (SLUS-01335), no emulator.
+"""Drop & Play — the developer bring-up pipeline for Battle Hunter (SLUS-01335).
 
-Give this tool your game file — drag it onto the desktop launcher (KDE),
-right-click → "Open With" (GNOME), or pass it as an argument — and it:
+A DEVELOPER tool: releases ship the compiled game (the retranslated C is
+committed under generated/ — see psxrecomp/docs/ci/BUNDLED_RELEASES.md), so
+players never run this. Use it on a git checkout to regenerate that C from
+YOUR OWN disc and rebuild — drag the file onto a terminal or pass it as an
+argument — and it:
 
   1. unsqueezes  .ecm → .bin      (builds the bundled unecm on first use)
   2. reconstructs the .cue sheet  (verified 5-track layout for SLUS-01335)
   3. translates  YOUR disc into C (psxrecomp "generate"; builds its tools)
   4. compiles the native game     (cmake + ninja, ~3 min)
-  5. boots straight into gameplay (--no-launcher --disc <your cue>)
+  5. launches the game            (opens the recomp-ui launcher: settings + PLAY)
 
-Nothing game-derived is shipped in this repository — steps 3–4 rebuild all of
-it locally, from your file. Repeat runs are fast: a stamp tracks your disc +
-framework, and unchanged means straight to step 5.
+Commit the regenerated generated/ with your change. Repeat runs are fast: a
+stamp tracks your disc + framework, and unchanged means straight to step 5.
 
-Prefer a GUI with a progress bar and a console window? Run the launcher:
-
-  python3 tools/launcher_gui.py
+Players: just download a release — run it and point the launcher at your
+own .cue/.bin dump. No build, no pipeline, nothing to regenerate.
 
 Usage:
   python3 tools/drop_and_play.py [PATH]        # path may be .ecm/.bin/.cue
                                               # no path → file picker
   python3 tools/drop_and_play.py PATH --no-play  # build, don't auto-launch
-Self-test (used by CI / after install):
-  python3 tools/drop_and_play.py --soak 25    # full pipeline + 25s headless boot
+Self-test (full pipeline + 25s headless boot):
+  python3 tools/drop_and_play.py --soak 25
 """
 
 import argparse
